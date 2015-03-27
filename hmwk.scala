@@ -2,8 +2,22 @@
 import scala.util.control.Exception._
 import scala.language.implicitConversions
 import scala.language.higherKinds
+import scala.math.Ordering
 
 import java.io.{ PrintWriter, Serializable }
+
+trait Ops[A] {
+  def self: A
+  def |>[B](f: (A) => B): B = f(self)
+}
+
+object ToOps {
+  implicit def anyToOps[A](a: A) = new Ops[A] {
+    def self: A = a
+  }
+}
+
+import ToOps._
 
 object InputHelpers {
   def readLine(reader: java.io.BufferedReader)() = {
@@ -139,12 +153,17 @@ class CSVWriter[A, B](private val amap: Map[A, List[B]]) {
   private var file: Option[String] = None
   private var owriter: Option[PrintWriter] = None
   private var afterNewLine: Boolean = true
+  private var keyOrdering: Option[Ordering[A]] = None
   def writeToCSV(f: String) = {
     file = Some(f)
     this
   }
   def withWriters(ohwriter: Option[(A) => String])(writer: (Option[B] => String)) = {
-    val k = amap.keys.toList
+    val k = if (keyOrdering.isDefined) {
+      keyOrdering.map({ (ord) =>
+        amap.keys.toList.sorted(ord)
+      }).getOrElse(amap.keys.toList)
+    } else amap.keys.toList
     val maxlen = k.map((kk) => amap(kk).length).max
     allCatch.opt {
       ohwriter.map({ (hwriter: (A) => String) =>
@@ -161,6 +180,10 @@ class CSVWriter[A, B](private val amap: Map[A, List[B]]) {
       })).finish
       true
     } getOrElse(false)
+  }
+  def withKeyOrdering(ord: Ordering[A]) = {
+    keyOrdering = Some(ord)
+    this
   }
   def write(l: List[List[String]]): CSVWriter[A, B] = {
     l foreach { (ll: List[String]) =>
@@ -180,7 +203,7 @@ class CSVWriter[A, B](private val amap: Map[A, List[B]]) {
   }
   def writeCell(s: String) = {
     if (!afterNewLine) {
-      stream.map(_.print(","))
+      stream.map(_.print(", "))
     }
     afterNewLine = false
     stream.map(_.print(s))
@@ -308,7 +331,12 @@ object GradeBook {
 }
 
 object Main extends App {
-  val whoacats: Option[Categories] = Categories()
+  val whoacats: Option[Categories] = if (args.length > 0) Categories(args(0))
+                                     else Categories({
+                                       print("Course Abbreviation: ")
+                                     } |> { (a: Unit) =>
+                                       InputHelpers.readLine(new java.io.BufferedReader(new java.io.InputStreamReader(java.lang.System.in))).getOrElse("comp170")
+                                     })
   whoacats.map({(cats: Categories) =>
     cats.names foreach { (cat: String) =>
       println(s"${cat}\n\tWeight: ${cats weightOf cat getOrElse Int.MaxValue}\n\t# Grades: ${cats timesWePet cat getOrElse Int.MaxValue}")
@@ -335,7 +363,21 @@ object Main extends App {
         "letter" -> stus.cooks.map({ (cook: String) => stus ratingsFrom cook map { (ratings: GradeBook) =>
           ratings.average.toGradeString
         } getOrElse ""})
-      ).writeToCSV(cats.cls + "_summary.txt").withWriters(Some((x) => x))((x) => x.getOrElse(""))
+      ).foldColumns(List("first", "avg", "letter"))(_ + " " + _)({(a: List[String], b: List[String]) =>
+        val maxlen = math.max(a.length, b.length)
+        (0 until maxlen).toList.map({ (x) =>
+          val aa = if (x < a.length) a(x) else ""
+          val bb = if (x < b.length) b(x) else ""
+          aa + " " + bb
+        })
+      }).writeToCSV(cats.cls + "_summary.txt").withKeyOrdering(new Ordering[String] {
+        def compare(x: String, y: String): Int = (x, y) match {
+          case ("last", "last") => 0
+          case ("last", _) => -1
+          case (_, "last") => 1
+          case (_, _) => 0
+        }
+      }).withWriters(None)((x) => x.getOrElse(""))
     })
   })
 }

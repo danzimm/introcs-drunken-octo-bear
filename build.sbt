@@ -1,6 +1,4 @@
 
-val scalazVersion = "7.1.1"
-
 lazy val root = (project in file(".")).
   settings(
     name := "CS170homework2",
