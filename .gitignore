@@ -3,3 +3,6 @@ target
 project
 .DS_Store
 *_summary.txt
+*.data
+categories_*.txt
+students_*.txt

@@ -266,18 +266,22 @@ case class GradeIndex(index: Int) extends GradeBookData
 case class Grade(grade: Double) extends GradeBookData {
   def toGradeString =
     (grade match {
-      case x if (x >= 100) => "A+++"
+      case x if (x > 100) => "A+++"
       case x if (x >= 90) => "A"
       case x if (x >= 80) => "B"
       case x if (x >= 70) => "C"
       case x if (x >= 60) => "D"
       case x if (x >= 0) => "F"
       case _ => "F---"
-    }) + (grade.toInt.abs % 10 match {
-      case x if (x <= 2) => "-"
-      case x if (x >= 8) => "+"
-      case _ => ""
-    })
+    }) + {
+      if (grade < 100 && grade >= 60) {
+        grade.toInt.abs % 10 match {
+          case x if (x <= 2) => "-"
+          case x if (x >= 8) => "+"
+          case _ => ""
+        }
+      } else ""
+    }
 }
 case class GradeBookBadData(data: String) extends GradeBookData
 
@@ -309,7 +313,9 @@ class GradeBook(private val unSortedBook: scala.collection.mutable.Map[String, L
     book(cat)
   }
   def averageFor(cat: String) =
-    gradesFor(cat).reduceLeft(_ + _) / gradesFor(cat).length.toDouble
+    gradesFor(cat).reduceLeft(_ + _) / cats.timesWePet(cat).
+                                            getOrElse(gradesFor(cat).length).
+                                            toDouble
   def average = subjects.map({ (subject: String) =>
       averageFor(subject) * cats.weightOf(subject).getOrElse(0) / 100
     }).reduceLeft(_ + _) / cats.jarOfCats.foldLeft(0: Double)({ (a: Double, d: Tuple2[String, Option[Tuple2[Int, Int]]]) =>
@@ -355,6 +361,7 @@ object Main extends App {
           }) + f"\tOverall: ${ratings.average}%.1f ${ratings.average.toGradeString}"
         } getOrElse s"No grades for $cook")
       }
+
       Map("last" -> stus.cooks.map({ (cook: String) => stus madeBy cook }),
         "first" -> stus.cooks.map({ (cook: String) => stus madeFor cook }),
         "avg" -> stus.cooks.map({ (cook: String) => stus ratingsFrom cook map { (ratings: GradeBook) =>
@@ -378,6 +385,7 @@ object Main extends App {
           case (_, _) => 0
         }
       }).withWriters(None)((x) => x.getOrElse(""))
+
     })
   })
 }
